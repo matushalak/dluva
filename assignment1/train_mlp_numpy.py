@@ -1,7 +1,7 @@
 ################################################################################
 # MIT License
 #
-# Copyright (c) 2024 University of Amsterdam
+# Copyright (c) 2025 University of Amsterdam
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -10,8 +10,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to conditions.
 #
-# Author: Deep Learning Course (UvA) | Fall 2024
-# Date Created: 2024-10-28
+# Author: Deep Learning Course (UvA) | Fall 2025
+# Date Created: 2025-10-28
 ################################################################################
 """
 This module implements training and evaluation of a multi-layer perceptron in NumPy.
@@ -74,7 +74,7 @@ def evaluate_model(model, data_loader):
     TODO:
     Implement evaluation of the MLP model on a given dataset.
 
-    Hint: make sure to return the average accuracy of the whole dataset,
+    Hint: make sure to return the average accuracy of the whole dataset, 
           independent of batch sizes (not all batches might be the same size).
     """
 
@@ -104,15 +104,15 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
       model: An instance of 'MLP', the trained model that performed best on the validation set.
       val_accuracies: A list of scalar floats, containing the accuracies of the model on the
                       validation set per epoch (element 0 - performance after epoch 1)
-      test_accuracy: scalar float, average accuracy on the test dataset of the model that
+      test_accuracy: scalar float, average accuracy on the test dataset of the model that 
                      performed best on the validation. Between 0.0 and 1.0
-      logging_dict: An arbitrary object containing logging information. This is for you to
+      logging_dict: An arbitrary object containing logging information. This is for you to 
                     decide what to put in here.
 
     TODO:
-    - Implement the training of the MLP model.
+    - Implement the training of the MLP model. 
     - Evaluate your model on the whole validation set each epoch.
-    - After finishing training, evaluate your model that performed best on the validation set,
+    - After finishing training, evaluate your model that performed best on the validation set, 
       on the whole test dataset.
     - Integrate _all_ input arguments of this function in your training. You are allowed to add
       additional input argument if you assign it a default value that represents the plain training
@@ -153,11 +153,11 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
 if __name__ == '__main__':
     # Command line arguments
     parser = argparse.ArgumentParser()
-
+    
     # Model hyperparameters
     parser.add_argument('--hidden_dims', default=[128], type=int, nargs='+',
                         help='Hidden dimensionalities to use inside the network. To specify multiple, use " " to separate them. Example: "256 128"')
-
+    
     # Optimizer hyperparameters
     parser.add_argument('--lr', default=0.1, type=float,
                         help='Learning rate to use')
@@ -177,3 +177,4 @@ if __name__ == '__main__':
 
     train(**kwargs)
     # Feel free to add any additional functions, such as plotting of the loss curve here
+    

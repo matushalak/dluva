@@ -1,7 +1,7 @@
 ################################################################################
 # MIT License
 #
-# Copyright (c) 2024 University of Amsterdam
+# Copyright (c) 2025 University of Amsterdam
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -10,8 +10,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to conditions.
 #
-# Author: Deep Learning Course (UvA) | Fall 2024
-# Date Created: 2024-10-28
+# Author: Deep Learning Course (UvA) | Fall 2025
+# Date Created: 2025-10-28
 ################################################################################
 """
 This module implements utility functions for downloading and reading CIFAR10 data.
@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torchvision import transforms
 
-
+    
 def get_dataloader(dataset, batch_size, return_numpy=False):
     collate_fn = numpy_collate_fn if return_numpy else None
     train_dataloader      = DataLoader(dataset=dataset["train"], batch_size=batch_size, shuffle=True, drop_last=True,
@@ -67,13 +67,13 @@ def read_data_sets(data_dir, validation_size=5000):
 
     train_dataset = CIFAR10(root=data_dir, train=True, download=True, transform=data_transforms)
     test_dataset = CIFAR10(root=data_dir, train=False, download=True, transform=data_transforms)
-
+    
     # Subsample the validation set from the train set
     if not 0 <= validation_size <= len(train_dataset):
         raise ValueError("Validation size should be between 0 and {0}. Received: {1}.".format(
             len(train_dataset), validation_size))
-
-    train_dataset, validation_dataset = random_split(train_dataset,
+        
+    train_dataset, validation_dataset = random_split(train_dataset, 
                                                      lengths=[len(train_dataset) - validation_size, validation_size],
                                                      generator=torch.Generator().manual_seed(42))
 

@@ -1,7 +1,7 @@
 ################################################################################
 # MIT License
 #
-# Copyright (c) 2024 University of Amsterdam
+# Copyright (c) 2025 University of Amsterdam
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -10,8 +10,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to conditions.
 #
-# Author: Deep Learning Course (UvA) | Fall 2024
-# Date Created: 2024-10-28
+# Author: Deep Learning Course (UvA) | Fall 2025
+# Date Created: 2025-10-28
 ################################################################################
 """
 This module implements a multi-layer perceptron (MLP) in PyTorch.
@@ -52,7 +52,7 @@ class MLP(nn.Module):
         Implement module setup of the network.
         The linear layer have to initialized according to the Kaiming initialization.
         Add the Batch-Normalization _only_ is use_batch_norm is True.
-
+        
         Hint: No softmax layer is needed here. Look at the CrossEntropyLoss module for loss calculation.
         """
 
@@ -94,4 +94,4 @@ class MLP(nn.Module):
         Returns the device on which the model is. Can be useful in some situations.
         """
         return next(self.parameters()).device
-
+    
