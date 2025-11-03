@@ -41,10 +41,10 @@ def accuracy(predictions, targets):
     
     Args:
       predictions: 2D float array of size [batch_size, n_classes], predictions of the model (logits)
-      llabels: 1D int array of size [batch_size]. Ground truth labels for
+      targets: 1D int array of size [batch_size]. Ground truth labels for
                each sample in the batch
     Returns:
-      accuracy: scalar float, the accuracy of predictions,
+      acc: scalar float, the accuracy of predictions,
                 i.e. the average correct predictions over the whole batch
     
     TODO:
@@ -54,12 +54,12 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    # Ordering of logits is preserved by softmax, so softmax not needed for accuracy computation
+    acc = (torch.argmax(predictions, dim = 1) == targets).float().mean()
     #######################
     # END OF YOUR CODE    #
     #######################
-    
-    return accuracy
+    return acc
 
 
 def evaluate_model(model, data_loader):
@@ -82,7 +82,16 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    nsamples = 0
+    cum_acc = 0
+    # accumulate running accuracy over batches (independent of batch size)
+    for Xb, Yb in data_loader:
+        Xb = Xb.view(-1, model.IN)
+        acc = accuracy(model.forward(Xb), Yb)
+        batchsize = Yb.shape[0]
+        cum_acc += acc * batchsize
+        nsamples += batchsize
+    avg_accuracy = cum_acc / nsamples
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -143,22 +152,136 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # get first batch
+    X1, Y1 = next(iter(cifar10_loader['train']))
+    bsize, rgb, height, width = X1.shape
+    nclasses = len(Y1.unique())
+    insize = rgb * height * width
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    # Initialize model and loss module
+    model = MLP(n_inputs=insize, n_hidden=hidden_dims, n_classes=nclasses, use_batch_norm=use_batch_norm)
+    loss_module = nn.CrossEntropyLoss()
+    # Initialize optimizer (minibatch sgd)
+    sgd = optim.SGD(model.parameters(), lr = lr)
+
+    best_val = 0
+    best_model = None
+    
+    loss_curve = []
+    train_accuracies = []
+    val_accuracies = []
+    
+    model.to(device)
+    # Training loop including validation
+    for epoch in range(epochs):
+        model.train()
+        for Xtr, Ytr in cifar10_loader['train']:
+            Xtr = Xtr.view(-1, model.IN)
+            Xtr, Ytr = Xtr.to(device), Ytr.to(device)
+            # reset gradients
+            sgd.zero_grad()
+            # model predictions
+            yhat = model.forward(Xtr)
+            # CE loss calculated on logits
+            L = loss_module(yhat, Ytr)
+            loss_curve.append(L.detach().numpy())
+            # backprop
+            L.backward()
+            # Minibatch SGD step
+            sgd.step()
+        
+        # At the end of epoch, get training and validation accuracy
+        model.eval()
+        ta = evaluate_model(model, cifar10_loader['train'])
+        va = evaluate_model(model, cifar10_loader['validation'])
+
+        print(f'Epoch {epoch} accuracy, training: {ta}, validation: {va}')
+        train_accuracies.append(ta.detach().numpy()); val_accuracies.append(va.detach().numpy())
+
+        # Save best model
+        if va >= best_val:
+            best_val = va
+            best_model:MLP = deepcopy(model)
+    
+    # Test best model
+    test_accuracy = evaluate_model(best_model, cifar10_loader['test'])
+    print(f'Test accuracy of best model: {test_accuracy}')
+
+    # Add any information you might want to save for plotting
+    logging_dict = {
+        'Epochs':np.arange(epochs),
+        'Train loss': loss_curve,
+        'Train acc':train_accuracies,
+        'Val acc': val_accuracies,
+        'Test acc': test_accuracy.detach().numpy()
+    }
     #######################
     # END OF YOUR CODE    #
     #######################
 
     return model, val_accuracies, test_accuracy, logging_dict
+
+# plotting functions
+def plot(**kwargs):
+    import matplotlib.pyplot as plt
+    # Initial run without batch norm
+    model_no_BN, _, _, logs_no_BN = train(**kwargs)
+    
+    f1, ax1 = plt.subplots(ncols=2)
+    # Loss curve
+    ax1[0].plot(logs_no_BN['Train loss'], label = 'Training loss')
+    ax1[0].legend(loc = 1)
+    ax1[0].set_ylabel('CE Loss'); ax1[0].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
+    # Accuracy curve
+    ax1[1].plot(logs_no_BN['Train acc'], label = 'Training accuracy')
+    ax1[1].plot(logs_no_BN['Val acc'], label = 'Validation accuracy')
+    ax1[1].legend(loc = 2)
+    ax1[1].set_ylabel('Classification Accuracy'); ax1[1].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
+
+    f1.tight_layout(); plt.show()
+
+    # Run with batch norm
+    kwargs['use_batch_norm'] = True
+    _, _, _, logs_BN = train(**kwargs)
+
+    f2, ax2 = plt.subplots(ncols=2)
+    # Loss curve
+    ax2[0].plot(logs_BN['Train loss'], label = 'Training loss')
+    ax2[0].legend(loc = 1)
+    ax2[0].set_ylabel('CE Loss'); ax2[0].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
+    # Accuracy curve
+    ax2[1].plot(logs_BN['Train acc'], label = 'Training accuracy')
+    ax2[1].plot(logs_BN['Val acc'], label = 'Validation accuracy')
+    ax2[1].legend(loc = 2)
+    ax2[1].set_ylabel('Classification Accuracy'); ax2[1].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
+
+    f2.tight_layout(); plt.show()
+
+def plot_batch_norm(epochs_per_depth:int, network_depths:list[int], **kwargs):
+    import matplotlib.pyplot as plt
+    test_noBN, test_BN = [], []
+    kwargs['epochs'] = epochs_per_depth
+    
+    for d in network_depths:
+        hiddens = 2**(np.linspace(10, 4, d)).astype(int)
+        kwargs['hidden_dims'] = hiddens.tolist()
+        # No BN model
+        kwargs['use_batch_norm'] = False
+        _, _, tstACC, _ = train(**kwargs)
+        test_noBN.append(tstACC)
+        # BN model
+        kwargs['use_batch_norm'] = True
+        _, _, tstACCbn, _ = train(**kwargs)
+        test_BN.append(tstACCbn)
+    
+    f, ax = plt.subplots()
+    ax.plot(test_noBN, color = 'k', label = 'MLP')
+    ax.plot(test_BN, color = 'g', label = 'MLP + Batch-Norm')
+    ax.legend(loc = 2)
+    ax.set_xlabel('Network Depth (# hidden layers)')
+    ax.set_ylabel('Test classification accuracy')
+    f.tight_layout(); plt.show()
+
 
 
 if __name__ == '__main__':
@@ -184,10 +307,18 @@ if __name__ == '__main__':
                         help='Seed to use for reproducing results')
     parser.add_argument('--data_dir', default='data/', type=str,
                         help='Data directory where to store/find the CIFAR10 dataset.')
+    
+    parser.add_argument('--plot', action = 'store_true')
 
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
+    plt_flag = kwargs['plot']
+    del kwargs['plot']
+
+    if plt_flag:
+        plot(**kwargs)
+        # plot_batch_norm(epochs_per_depth=5, network_depths= [1, 3, 5, 7], **kwargs)
+    else:
+        train(**kwargs)
     

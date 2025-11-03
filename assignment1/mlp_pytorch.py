@@ -32,7 +32,7 @@ class MLP(nn.Module):
     Once initialized an MLP object can perform forward.
     """
 
-    def __init__(self, n_inputs, n_hidden, n_classes, use_batch_norm=False):
+    def __init__(self, n_inputs:int, n_hidden:list[int], n_classes:int, use_batch_norm=False):
         """
         Initializes MLP object.
 
@@ -59,7 +59,34 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        super().__init__()
+        self.IN, self.HIDDEN, self.OUT = n_inputs, n_hidden, n_classes
+        layer_sizes = [n_inputs] + n_hidden + [n_classes]
+        
+        if n_hidden == 0 or len(n_hidden) == 0 or n_hidden is None or n_hidden[0] == 0 or n_hidden[0] is None:
+            # logistic regression edge case
+            self.layers = nn.Linear(n_inputs, n_classes)
+            # equal activation and gradient variance for linear layer without activation function
+            nn.init.xavier_normal_(self.layers.weight)
+            nn.init.zeros_(self.layers.bias)
+        
+        else:
+            layers = []
+            for insize, outsize in zip(layer_sizes, layer_sizes[1:]):
+                layers += [nn.Linear(insize, outsize)]
+                # batch norm before non-linearity
+                if use_batch_norm:
+                    layers += [nn.BatchNorm1d(outsize)]
+                layers += [nn.ELU()]
+            # Chain linear layers, (batch norms), and ELU nonlinearities
+            self.layers = nn.Sequential(*layers)
+
+            # Initialization of weights with kaiming, biases with zeros
+            for l in self.layers:
+                if isinstance(l, nn.Linear):
+                    # elu is not supported but leaky relu close enough
+                    nn.init.kaiming_normal_(l.weight, nonlinearity='leaky_relu')
+                    nn.init.zeros_(l.bias)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -81,7 +108,8 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # nn.Sequential in __init__ describes the forward pass
+        out = self.layers(x)
         #######################
         # END OF YOUR CODE    #
         #######################
