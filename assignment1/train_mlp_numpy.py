@@ -129,6 +129,8 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     cifar10 = cifar10_utils.get_cifar10(data_dir)
     cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
                                                   return_numpy=True)
+    x, y = next(iter(cifar10_loader['train']))
+    print(y.shape)
 
     #######################
     # PUT YOUR CODE HERE  #

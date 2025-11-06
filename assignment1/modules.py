@@ -41,16 +41,26 @@ class LinearModule(object):
 
         Also, initialize gradients with zeros.
         """
-
         # Note: For the sake of this assignment, please store the parameters
         # and gradients in this format, otherwise some unit tests might fail.
         self.params = {'weight': None, 'bias': None} # Model parameters
         self.grads = {'weight': None, 'bias': None} # Gradients
-
+        
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # Initialize biases to 0
+        self.params['bias'] = np.zeros(out_features)
+        # Use Kaiming initialization for weights
+        if input_layer:
+            self.params['weight'] = np.random.normal(0, 1/np.sqrt(in_features), 
+                                                     size=(out_features, in_features))
+        else:
+            self.params['weight'] = np.random.normal(0, np.sqrt(2)/np.sqrt(in_features), 
+                                                     size=(out_features, in_features))
+        # Initialize gradients
+        self.grads['weight'] = np.zeros((out_features, in_features))
+        self.grads['bias'] = np.zeros(out_features)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -73,7 +83,9 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # (B, D) @ (M, D).T + (:, M) -> (B, M)
+        out = x @ self.params['weight'].T + self.params['bias'][None, :]
+        self.x = x
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -97,7 +109,12 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # (B, M).T @ (B, D) -> (M, D)
+        self.grads['weight'] += dout.T @ self.x
+        # (B, M) -> (M)
+        self.grads['bias'] += np.sum(dout, axis = 0)
+        # (B,M) @ (M, D) -> (B, D)
+        dx = dout @ self.params['weight']
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -114,7 +131,7 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.x = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -125,7 +142,7 @@ class ELUModule(object):
     ELU activation module.
     """
 
-    def __init__(self, alpha):
+    def __init__(self, alpha = 1):
         self.alpha = alpha
 
     def forward(self, x):
@@ -146,7 +163,9 @@ class ELUModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # ELU activation function
+        out = np.where(x >= 0, x, self.alpha * (np.exp(x) - 1))
+        self.x = x
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -168,7 +187,8 @@ class ELUModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # derivative is 1 for non-negative elements, and alpha * exp for negative elements
+        dx = dout * np.where(self.x >= 0, 1, self.alpha * np.exp(self.x))
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -185,7 +205,7 @@ class ELUModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.x = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -214,7 +234,11 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # To stabilize, leverage shift-invariant property
+        z = np.exp(x-np.max(x, axis = 1, keepdims=True))
+        out = z / np.sum(z, axis = 1, keepdims=True)
+        self.y = out
+        self.K =  out.shape[1]
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -236,7 +260,8 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # (B, K) * (B,K) - (((B,K)*(B,K)) @ (K,K)) -> (B,K)
+        dx = self.y * (dout - (dout * self.y) @ np.ones((self.K, self.K)))
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -254,7 +279,8 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.y = None
+        self.K = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -281,7 +307,13 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # one-hot encoding
+        K = x.shape[1]
+        T = np.eye(y.shape[0])[y, :K] 
+        # sum [(B, K) * (B, K)] -> (B)
+        CEper_batch = -np.sum(T * np.log(x), axis = 1)
+        # Mean over batch dimension (B) -> scalar
+        out = np.mean(CEper_batch, axis = 0)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -304,7 +336,11 @@ class CrossEntropyModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # One-hot
+        K = x.shape[1]
+        T = np.eye(y.shape[0])[y, :K]
+        # (B, K) / (scalar * (B, K)) -> (B,K)
+        dx = - T / (x.shape[0] * x)
         #######################
         # END OF YOUR CODE    #
         #######################

@@ -82,11 +82,15 @@ class MLP(nn.Module):
             self.layers = nn.Sequential(*layers)
 
             # Initialization of weights with kaiming, biases with zeros
-            for l in self.layers:
+            for il, l in enumerate(self.layers):
                 if isinstance(l, nn.Linear):
-                    # elu is not supported but leaky relu close enough
-                    nn.init.kaiming_normal_(l.weight, nonlinearity='leaky_relu')
-                    nn.init.zeros_(l.bias)
+                    if il == 0:
+                        # Kaiming for first layer without ReLU
+                        nn.init.normal_(l.weight, 0, 1/(l.weight.shape[1]**0.5))
+                    else:
+                        # elu is not supported but Kaming for leaky relu close enough
+                        nn.init.kaiming_normal_(l.weight, nonlinearity='leaky_relu')
+                        nn.init.zeros_(l.bias)
         #######################
         # END OF YOUR CODE    #
         #######################
