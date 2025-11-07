@@ -53,12 +53,13 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    # Predicted class = argmax of softmax probabilities
+    acc = (np.argmax(predictions, axis = 1) == targets).mean()
     #######################
     # END OF YOUR CODE    #
     #######################
 
-    return accuracy
+    return acc
 
 
 def evaluate_model(model, data_loader):
@@ -81,7 +82,16 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    nsamples = 0
+    cum_acc = 0
+    # accumulate running accuracy over batches (independent of batch size)
+    for Xb, Yb in data_loader:
+        Xb = Xb.reshape(-1, model.IN)
+        acc = accuracy(model.forward(Xb), Yb)
+        batchsize = Yb.shape[0]
+        cum_acc += acc * batchsize
+        nsamples += batchsize
+    avg_accuracy = cum_acc / nsamples
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -129,22 +139,86 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     cifar10 = cifar10_utils.get_cifar10(data_dir)
     cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
                                                   return_numpy=True)
-    x, y = next(iter(cifar10_loader['train']))
-    print(y.shape)
+
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # get first batch
+    X1, Y1 = next(iter(cifar10_loader['train']))
+    bsize, rgb, height, width = X1.shape
+    nclasses = len(np.unique(Y1))
+    insize = rgb * height * width
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    # Initialize model and loss module
+    model = MLP(n_inputs=insize, n_hidden=hidden_dims, n_classes=nclasses)
+    loss_module = CrossEntropyModule()
+
+    best_val = 0
+    best_model = None
+    
+    loss_curve = []
+    train_accuracies = []
+    val_accuracies = []
+    
+    def zero_grad(model:MLP):
+        for l in model.layers:
+            if hasattr(l, 'grads'):
+                for g in l.grads.values():
+                    # fill all gradients with zeros
+                    g[...] = 0
+    
+    def grad_step(model:MLP, lr:float):
+        for l in model.layers:
+            if hasattr(l, 'params'):
+                for k, p in l.params.items():
+                    # Gradient descent on params
+                    # (using gradients calculated in backprop)
+                    p -= lr * l.grads[k]
+
+    # Training loop including validation and manual SGD
+    for epoch in range(epochs):
+        for Xtr, Ytr in cifar10_loader['train']:
+            Xtr = Xtr.reshape(-1, model.IN)
+            # reset gradients
+            zero_grad(model)
+            # model predictions
+            model.clear_cache()
+            yhat = model.forward(Xtr)
+            # CE loss calculated on softmax
+            L = loss_module.forward(yhat, Ytr)
+            loss_curve.append(L)
+            # backprop
+            # gradient of loss wrt softmax probabilities
+            dout = loss_module.backward(yhat, Ytr)
+            model.backward(dout)
+            # Minibatch SGD step
+            grad_step(model, lr)
+        
+        # At the end of epoch, get training and validation accuracy
+        ta = evaluate_model(model, cifar10_loader['train'])
+        va = evaluate_model(model, cifar10_loader['validation'])
+
+        print(f'Epoch {epoch} accuracy, training: {ta}, validation: {va}')
+        train_accuracies.append(ta); val_accuracies.append(va)
+
+        # Save best model
+        if va >= best_val:
+            best_val = va
+            best_model:MLP = deepcopy(model)
+    
+    # Test best model
+    test_accuracy = evaluate_model(best_model, cifar10_loader['test'])
+    print(f'Test accuracy of best model: {test_accuracy}')
+
+    # Add any information you might want to save for plotting
+    logging_dict = {
+        'Epochs':np.arange(epochs),
+        'Train loss': loss_curve,
+        'Train acc':train_accuracies,
+        'Val acc': val_accuracies,
+        'Test acc': test_accuracy
+    }
     #######################
     # END OF YOUR CODE    #
     #######################

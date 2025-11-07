@@ -52,7 +52,25 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.IN, self.HIDDEN, self.OUT = n_inputs, n_hidden, n_classes
+        layer_sizes = [n_inputs] + n_hidden
+        self.params = dict()
+        # Parameter initialization already handled inside modules
+        if n_hidden == 0 or len(n_hidden) == 0 or n_hidden is None or n_hidden[0] == 0:
+            # logistic regression edge case
+            self.layers = [LinearModule(n_inputs, n_classes, input_layer=True)]
+        else:
+            # Chain linear layers and ELU nonlinearities
+            self.layers = []
+            for il, (insize, outsize) in enumerate(zip(layer_sizes, layer_sizes[1:])):
+                self.layers.append(LinearModule(insize, outsize, input_layer = il == 0))
+                self.layers.append(ELUModule())
+        
+            # Add final logit head (without ELU nonlinearity)
+            self.layers.append(LinearModule(n_hidden[-1], n_classes))
+        
+        # Here we use the softmax module
+        self.softmax = SoftMaxModule()    
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -74,7 +92,12 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        # Go through linear layers 
+        # and nonlinear activations
+        for l in self.layers:
+            x = l.forward(x)
+        # Apply softmax on logits in output layer
+        out = self.softmax.forward(x)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -95,7 +118,10 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        # Gradient of softmax wrt logits given gradient of loss w
+        dout = self.softmax.backward(dout)
+        for l in self.layers[::-1]:
+            dout = l.backward(dout)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -112,7 +138,9 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        for l in self.layers:
+            l.clear_cache()
+        self.softmax.clear_cache()
         #######################
         # END OF YOUR CODE    #
         #######################

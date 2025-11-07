@@ -309,7 +309,7 @@ class CrossEntropyModule(object):
         #######################
         # one-hot encoding
         K = x.shape[1]
-        T = np.eye(y.shape[0])[y, :K] 
+        T = np.eye(K)[y] 
         # sum [(B, K) * (B, K)] -> (B)
         CEper_batch = -np.sum(T * np.log(x), axis = 1)
         # Mean over batch dimension (B) -> scalar
@@ -338,8 +338,9 @@ class CrossEntropyModule(object):
         #######################
         # One-hot
         K = x.shape[1]
-        T = np.eye(y.shape[0])[y, :K]
+        T = np.eye(K)[y]
         # (B, K) / (scalar * (B, K)) -> (B,K)
+        # gradients normalized per-sample
         dx = - T / (x.shape[0] * x)
         #######################
         # END OF YOUR CODE    #

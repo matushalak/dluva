@@ -61,36 +61,43 @@ class MLP(nn.Module):
         #######################
         super().__init__()
         self.IN, self.HIDDEN, self.OUT = n_inputs, n_hidden, n_classes
-        layer_sizes = [n_inputs] + n_hidden + [n_classes]
+        layer_sizes = [n_inputs] + n_hidden
         
-        if n_hidden == 0 or len(n_hidden) == 0 or n_hidden is None or n_hidden[0] == 0 or n_hidden[0] is None:
+        if n_hidden == 0 or len(n_hidden) == 0 or n_hidden is None or n_hidden[0] == 0:
             # logistic regression edge case
             self.layers = nn.Linear(n_inputs, n_classes)
             # equal activation and gradient variance for linear layer without activation function
-            nn.init.xavier_normal_(self.layers.weight)
+            nn.init.normal_(self.layers.weight, 0, 1/(self.layers.weight.shape[1]**0.5))
             nn.init.zeros_(self.layers.bias)
         
         else:
             layers = []
-            for insize, outsize in zip(layer_sizes, layer_sizes[1:]):
-                layers += [nn.Linear(insize, outsize)]
+            for il, (insize, outsize) in enumerate(zip(layer_sizes, layer_sizes[1:])):
+                l = nn.Linear(insize, outsize)
+                # Initialization of weights with kaiming, biases with zeros
+                if il == 0:
+                    # "Linear" Kaiming for first layer without ReLU
+                    nn.init.normal_(l.weight, 0, 1/(l.weight.shape[1]**0.5))
+                    nn.init.zeros_(l.bias)
+                else:
+                    # ELU is not supported but Kaming for relu close enough
+                    nn.init.kaiming_normal_(l.weight, nonlinearity='relu')
+                    nn.init.zeros_(l.bias)
+                layers += [l]
                 # batch norm before non-linearity
                 if use_batch_norm:
                     layers += [nn.BatchNorm1d(outsize)]
                 layers += [nn.ELU()]
+            
+            # Final logit layer - without batch norm and elu
+            head = nn.Linear(n_hidden[-1], n_classes)
+            nn.init.kaiming_normal_(head.weight, nonlinearity='relu')
+            nn.init.zeros_(head.bias)
+            layers += [head]
             # Chain linear layers, (batch norms), and ELU nonlinearities
             self.layers = nn.Sequential(*layers)
 
-            # Initialization of weights with kaiming, biases with zeros
-            for il, l in enumerate(self.layers):
-                if isinstance(l, nn.Linear):
-                    if il == 0:
-                        # Kaiming for first layer without ReLU
-                        nn.init.normal_(l.weight, 0, 1/(l.weight.shape[1]**0.5))
-                    else:
-                        # elu is not supported but Kaming for leaky relu close enough
-                        nn.init.kaiming_normal_(l.weight, nonlinearity='leaky_relu')
-                        nn.init.zeros_(l.bias)
+
         #######################
         # END OF YOUR CODE    #
         #######################
