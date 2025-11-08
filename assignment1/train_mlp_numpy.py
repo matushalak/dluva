@@ -247,10 +247,29 @@ if __name__ == '__main__':
                         help='Seed to use for reproducing results')
     parser.add_argument('--data_dir', default='data/', type=str,
                         help='Data directory where to store/find the CIFAR10 dataset.')
+    parser.add_argument('--plot', action = 'store_true')
 
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
+    plt_flag = kwargs['plot']
+    del kwargs['plot']
+
+    if plt_flag:
+        import matplotlib.pyplot as plt
+        model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
+        f1, ax1 = plt.subplots(ncols=2)
+        # Loss curve
+        ax1[0].plot(logging_dict['Train loss'], label = 'Training loss')
+        ax1[0].legend(loc = 1)
+        ax1[0].set_ylabel('CE Loss'); ax1[0].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
+        # Accuracy curve
+        ax1[1].plot(logging_dict['Train acc'], label = 'Training set')
+        ax1[1].plot(logging_dict['Val acc'], label = 'Validation set')
+        ax1[1].legend(loc = 2)
+        ax1[1].set_ylabel('Classification Accuracy'); ax1[1].set_xlabel(f'Epoch')
+        f1.tight_layout(); plt.show()
+
+    else:
+        train(**kwargs)
     

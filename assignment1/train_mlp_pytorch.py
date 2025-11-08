@@ -196,7 +196,8 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
         va = evaluate_model(model, cifar10_loader['validation'])
 
         print(f'Epoch {epoch} accuracy, training: {ta}, validation: {va}')
-        train_accuracies.append(ta.detach().numpy()); val_accuracies.append(va.detach().numpy())
+        train_accuracies.append(ta.detach().numpy()) 
+        val_accuracies.append(va.detach().numpy())
 
         # Save best model
         if va >= best_val:
@@ -204,6 +205,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
             best_model:MLP = deepcopy(model)
     
     # Test best model
+    best_model.eval() 
     test_accuracy = evaluate_model(best_model, cifar10_loader['test'])
     print(f'Test accuracy of best model: {test_accuracy}')
 
@@ -221,68 +223,70 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
 
     return model, val_accuracies, test_accuracy, logging_dict
 
-# plotting functions
-def plot(**kwargs):
+def plot_logs(logs:dict):
     import matplotlib.pyplot as plt
-    # Initial run without batch norm
-    model_no_BN, _, _, logs_no_BN = train(**kwargs)
-    
     f1, ax1 = plt.subplots(ncols=2)
     # Loss curve
-    ax1[0].plot(logs_no_BN['Train loss'], label = 'Training loss')
+    ax1[0].plot(logs['Train loss'], label = 'Training loss')
     ax1[0].legend(loc = 1)
     ax1[0].set_ylabel('CE Loss'); ax1[0].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
     # Accuracy curve
-    ax1[1].plot(logs_no_BN['Train acc'], label = 'Training accuracy')
-    ax1[1].plot(logs_no_BN['Val acc'], label = 'Validation accuracy')
+    ax1[1].plot(logs['Train acc'], label = 'Training accuracy')
+    ax1[1].plot(logs['Val acc'], label = 'Validation accuracy')
     ax1[1].legend(loc = 2)
-    ax1[1].set_ylabel('Classification Accuracy'); ax1[1].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
-
+    ax1[1].set_ylabel('Classification Accuracy'); ax1[1].set_xlabel('Epoch')
     f1.tight_layout(); plt.show()
 
+# plotting functions
+def plot(**kwargs):
+    # Initial run without batch norm
+    # model_no_BN, _, _, logs_no_BN = train(**kwargs)
+    # plot_logs(logs_no_BN)
     # Run with batch norm
     kwargs['use_batch_norm'] = True
     _, _, _, logs_BN = train(**kwargs)
+    plot_logs(logs_BN)
 
-    f2, ax2 = plt.subplots(ncols=2)
-    # Loss curve
-    ax2[0].plot(logs_BN['Train loss'], label = 'Training loss')
-    ax2[0].legend(loc = 1)
-    ax2[0].set_ylabel('CE Loss'); ax2[0].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
-    # Accuracy curve
-    ax2[1].plot(logs_BN['Train acc'], label = 'Training accuracy')
-    ax2[1].plot(logs_BN['Val acc'], label = 'Validation accuracy')
-    ax2[1].legend(loc = 2)
-    ax2[1].set_ylabel('Classification Accuracy'); ax2[1].set_xlabel(f'Iteration ({kwargs['epochs']} epochs)')
-
-    f2.tight_layout(); plt.show()
-
-def plot_batch_norm(epochs_per_depth:int, network_depths:list[int], **kwargs):
+# bonus - depth and batch norm experiment
+def plot_batch_norm(epochs_per_depth:int, network_depths:list[list[int]], **kwargs):
     import matplotlib.pyplot as plt
-    test_noBN, test_BN = [], []
+    import seaborn as sns
+    import pandas as pd
+    noBN, BN = [], []
     kwargs['epochs'] = epochs_per_depth
     
     for d in network_depths:
-        hiddens = 2**(np.linspace(10, 4, d)).astype(int)
-        kwargs['hidden_dims'] = hiddens.tolist()
+        print(f'processing {d}')
+        kwargs['hidden_dims'] = d
         # No BN model
         kwargs['use_batch_norm'] = False
-        _, _, tstACC, _ = train(**kwargs)
-        test_noBN.append(tstACC)
+        _, _, _, logs_noBN = train(**kwargs)
+        logs_noBN['Dims'] = len(d)
+        noBN.append(logs_noBN)
+        
         # BN model
         kwargs['use_batch_norm'] = True
-        _, _, tstACCbn, _ = train(**kwargs)
-        test_BN.append(tstACCbn)
+        _, _, _, logs_BN = train(**kwargs)
+        logs_BN['Dims'] = len(d)
+        BN.append(logs_BN)
     
-    f, ax = plt.subplots()
-    ax.plot(test_noBN, color = 'k', label = 'MLP')
-    ax.plot(test_BN, color = 'g', label = 'MLP + Batch-Norm')
-    ax.legend(loc = 2)
-    ax.set_xlabel('Network Depth (# hidden layers)')
-    ax.set_ylabel('Test classification accuracy')
-    f.tight_layout(); plt.show()
-
-
+    def process_logs(logs:list[dict], logsbn:list[dict])-> pd.DataFrame:
+        tests = {'Test accuracy':[],
+                 'Depth':[],
+                 'Model':[]}
+        models = ['MLP', 'MLP + BatchNorm']
+        for d in range(len(logs)):
+            for m, log in enumerate([logs[d], logsbn[d]]):
+                # Test DF
+                tests['Test accuracy'].append(log['Test acc'].tolist())
+                tests['Depth'].append(log['Dims'])
+                tests['Model'].append(models[m])
+        return pd.DataFrame(tests)
+    
+    # plot
+    dfTest = process_logs(noBN, BN)
+    sns.pointplot(dfTest, x= 'Depth', y = 'Test accuracy', hue = 'Model', palette='Set1')
+    plt.tight_layout(); plt.show()
 
 if __name__ == '__main__':
     # Command line arguments
@@ -318,7 +322,8 @@ if __name__ == '__main__':
 
     if plt_flag:
         plot(**kwargs)
-        # plot_batch_norm(epochs_per_depth=5, network_depths= [1, 3, 5, 7], **kwargs)
+        # bonus experiment with batch norm
+        plot_batch_norm(epochs_per_depth=10, network_depths= [[128] * i for i in range(1, 11, 3)], **kwargs)
     else:
         train(**kwargs)
     
