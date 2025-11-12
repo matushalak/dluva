@@ -1,6 +1,6 @@
 # Assignment 2, Part 2: Micro-GPT
 
-This folder contains the template code for implementing your own GPT2 model. This corresponds to Question .. to .. in the assignment. We will train the model to predict next characters. The code is structured in the following way:
+This folder contains the template code for implementing your own GPT2 model. We will train the model to predict next characters. The code is structured in the following way:
 
 * `dataset.py`: Contains the implementation of the character-level text dataset and tokenizer. It includes:
   - `CharTokenizer`: A class that handles conversion between characters and indices, with methods for encoding text to indices and decoding indices back to text.

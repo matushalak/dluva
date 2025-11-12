@@ -240,8 +240,8 @@ def plot_logs(logs:dict):
 # plotting functions
 def plot(**kwargs):
     # Initial run without batch norm
-    # model_no_BN, _, _, logs_no_BN = train(**kwargs)
-    # plot_logs(logs_no_BN)
+    model_no_BN, _, _, logs_no_BN = train(**kwargs)
+    plot_logs(logs_no_BN)
     # Run with batch norm
     kwargs['use_batch_norm'] = True
     _, _, _, logs_BN = train(**kwargs)
