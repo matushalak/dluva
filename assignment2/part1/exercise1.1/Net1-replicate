@@ -1,0 +1,8 @@
+*******************************************
+Type of convolution: replicate
+Type of network: Net1
+*******************************************
+Results for validation dataset: {0: 98.5, 1: 98.5, 2: 98.5, 3: 98.4, 4: 98.1, 5: 98.4, 6: 96.6, 7: 98.5, 8: 98.0, 9: 96.6}
+mean: 98.0100 std: 0.7245 for validation
+Results for test dataset: {0: 96.4, 1: 93.0, 2: 90.1, 3: 94.2, 4: 93.2, 5: 92.7, 6: 97.1, 7: 94.7, 8: 92.7, 9: 96.9}
+mean: 94.1000 std: 2.1081 for test

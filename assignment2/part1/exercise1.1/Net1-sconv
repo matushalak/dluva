@@ -1,0 +1,8 @@
+*******************************************
+Type of convolution: sconv
+Type of network: Net1
+*******************************************
+Results for validation dataset: {0: 99.0, 1: 98.9, 2: 98.8, 3: 99.1, 4: 99.2, 5: 99.2, 6: 98.8, 7: 99.0, 8: 99.0, 9: 98.6}
+mean: 98.9600 std: 0.1800 for validation
+Results for test dataset: {0: 6.4, 1: 6.8, 2: 6.7, 3: 6.7, 4: 6.5, 5: 7.1, 6: 6.0, 7: 6.1, 8: 6.5, 9: 6.3}
+mean: 6.5100 std: 0.3145 for test

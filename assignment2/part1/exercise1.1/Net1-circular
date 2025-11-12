@@ -1,0 +1,8 @@
+*******************************************
+Type of convolution: circular
+Type of network: Net1
+*******************************************
+Results for validation dataset: {0: 99.8, 1: 98.8, 2: 99.8, 3: 99.8, 4: 99.6, 5: 99.2, 6: 99.7, 7: 99.8, 8: 99.5, 9: 99.9}
+mean: 99.5900 std: 0.3270 for validation
+Results for test dataset: {0: 82.8, 1: 81.5, 2: 77.5, 3: 85.4, 4: 84.0, 5: 78.6, 6: 88.2, 7: 82.0, 8: 83.7, 9: 87.0}
+mean: 83.0700 std: 3.2116 for test
