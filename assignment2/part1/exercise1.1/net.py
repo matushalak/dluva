@@ -351,6 +351,19 @@ if __name__ == '__main__':
     std_val = np.std(acc_val)
     mean_test = np.mean(acc_test)
     std_test = np.std(acc_test)
+    
+    # Save logging files
+    with open(f'{net_type}-{conv_type}', 'w') as f:
+        f.writelines([
+            "*******************************************\n",
+            f"Type of convolution: {conv_type}\n",
+            f"Type of network: {net_type}\n", 
+            "*******************************************\n",
+            f'Results for validation dataset: {results_val}\n',
+            'mean: {:.4f} std: {:.4f} for validation\n'.format(mean_val, std_val),
+            f'Results for test dataset: {results_test}\n',
+            'mean: {:.4f} std: {:.4f} for test'.format(mean_test, std_test)
+        ])
 
     print("*******************************************")
     print(" Type of convolution : ", conv_type)
