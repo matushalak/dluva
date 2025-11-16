@@ -42,6 +42,11 @@ class RMSNorm(nn.Module):
     def forward(self, x):
         # Compute the norm of the input tensor and divide by the norm
         # Scale the normalized tensor by the learned weight parameter
+        B, T, d_model = x.size()
+        denominator = torch.sqrt(
+            torch.mean(torch.square(x), dim = -1, keepdim=True) 
+            + self.eps)
+        output = self.weight[None, None, :] * (x / denominator)
         return output
 
 class CausalSelfAttention(nn.Module):
@@ -103,25 +108,30 @@ class CausalSelfAttention(nn.Module):
         Args:
             xq (torch.Tensor): Query tensor of shape [batch, num_heads, seq_len, head_dim].
             xk (torch.Tensor): Key tensor of shape [batch, num_heads, seq_len, head_dim].
-            pos (torch.Tensor): Sinusoidal position embeddings for RoPE of shape [1, 1, seq_len, head_dim].
-            
+            T int: sequence length
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Tuple containing the modified query and key tensors.
         """
+        b, h, t, d = xq.shape
         # Generate RoPE embeddings dynamically based on T
-        seq_pos = ...  # Shape: (T)
-        freqs = ...    # Shape: (T, dim // 2)
-        pos_emb = ...  # Shape: (1, 1, T, dim)
+        seq_pos = torch.arange(T)  # Shape: (T)
+        pos_angles = seq_pos[:, None] * self.inv_freq[None, :]    # Shape: (T, dim // 2)
         
         # Split pos into sin and cos components, repeating each to match xq and xk dimensions
-        pos_sin = ...
-        pos_cos = ...
-        
+        # (1, 1, T, dim // 2)
+        pos_sin = torch.sin(pos_angles)[None, None, ...]
+        pos_cos = torch.cos(pos_angles)[None, None, ...]
+
         # Apply RoPE transformation: pair and rotate dimensions
-        # Rotate query and key tensors
-        xq_rot = ...
-        xk_rot = ...
-        raise NotImplementedError
+        # Rotate query and key tensors (split between even and odd embedding dimensions)
+        # apply to queries
+        xq_rot_even = pos_cos * xq[..., 0::2] - pos_sin * xq[..., 1::2]
+        xq_rot_odd = pos_sin * xq[..., 0::2] + pos_cos * xq[..., 1::2]
+        xq_rot = torch.stack((xq_rot_even, xq_rot_odd), dim = - 1).view(b,h,t,d)
+        # apply to keys
+        xk_rot_even = pos_cos * xk[..., 0::2] - pos_sin * xk[..., 1::2]
+        xk_rot_odd = pos_sin * xk[..., 0::2] + pos_cos * xk[..., 1::2]
+        xk_rot = torch.stack((xk_rot_even, xk_rot_odd), dim = - 1).view(b,h,t,d)
         
         return xq_rot, xk_rot
         
@@ -130,11 +140,18 @@ class CausalSelfAttention(nn.Module):
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         # Split output of attention-head in query, key and value
-        q, k ,v  = ...
-
-        q = ...
-        k = ...
-        v = ...
+        
+        # want to multiply x and W_mapping 
+        # (B, T, d_model) @ (d_model, 3*d_model) -> (B, T, 3*d_model)
+        allheads = self.c_attn(x) # use Linear layer defined in __init__
+        
+        # add head dimension -> (B, nh, T, 3*d_k)
+        d_k = C // self.n_head
+        allheads = allheads.view(B, T, 3*d_k, self.n_head) 
+        allheads = torch.permute(allheads, (0, 3, 1, 2))
+        
+        # Split into Q, K, V each with shape (B, nh, T, d_k)
+        q, k ,v  = torch.tensor_split(allheads, 3, dim = -1)
 
         if not self.config.abs_emb:
             q, k = self.apply_rotary_emb(q, k, T)
@@ -142,15 +159,29 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         # Calculate attention weights using key and queries, moreover, apply dropout to the weigths
         # Mask the calculated attention weights with the mask parameter.
-
+        
         if self.use_flash_attn:
             y = ...
         else:
             # Compute attention scores
-            att = ... 
+            # (similarity) Scaled Dot Product = (Q@K.T)/sqrt(d_k)
+            similarity = torch.matmul(q, k.transpose(-2, -1)) / (d_k**0.5)
+            
             # Apply causal mask
+            # self.mask defines maximum context window
+            # each time take necessary number of tokens :T, :T
+            mask = self.mask[..., :T, :T]
+            similarity = torch.masked_fill(similarity, mask == 0, float('-inf'))
+            
+            # Apply Softmax (masked entries with -inf effectively zeroed out)
+            att = torch.softmax(similarity, dim = -1)
+
+            # Apply dropout
+            att = self.attn_dropout(att)
+            
             # Apply attention to the values
-            y = ... # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            y = torch.matmul(att, v)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
