@@ -161,7 +161,10 @@ class CausalSelfAttention(nn.Module):
         # Mask the calculated attention weights with the mask parameter.
         
         if self.use_flash_attn:
-            y = ...
+            # Flash attention - exact attention optimized in a fused kernel
+            y = F.scaled_dot_product_attention(q, k, v, 
+                                               self.mask[..., :T, :T], 
+                                               self.config.attn_pdrop)
         else:
             # Compute attention scores
             # (similarity) Scaled Dot Product = (Q@K.T)/sqrt(d_k)
