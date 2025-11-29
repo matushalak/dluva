@@ -43,6 +43,7 @@ class RMSNorm(nn.Module):
         # Compute the norm of the input tensor and divide by the norm
         # Scale the normalized tensor by the learned weight parameter
         B, T, d_model = x.size()
+        assert d_model == len(self.weight), f'Print mismatch between d_model {d_model} and weight dim {len(self.weight)}'
         denominator = torch.sqrt(
             torch.mean(torch.square(x), dim = -1, keepdim=True) 
             + self.eps)
@@ -113,9 +114,10 @@ class CausalSelfAttention(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Tuple containing the modified query and key tensors.
         """
         b, h, t, d = xq.shape
+        assert T == t, f"Provided T={T} but xq has seq_len={t}"
         # Generate RoPE embeddings dynamically based on T
-        seq_pos = torch.arange(T)  # Shape: (T)
-        pos_angles = seq_pos[:, None] * self.inv_freq[None, :]    # Shape: (T, dim // 2)
+        seq_pos = torch.arange(T, device = xq.device)  # Shape: (T)
+        pos_angles = seq_pos[:, None] * self.inv_freq[None, :].to(xq.device)    # Shape: (T, dim // 2)
         
         # Split pos into sin and cos components, repeating each to match xq and xk dimensions
         # (1, 1, T, dim // 2)
@@ -207,7 +209,11 @@ class TransformerDecoderBlock(nn.Module):
         layer_norm_1 (RMSNorm): Layer normalization applied before the self-attention layer.
         self_attention (CausalSelfAttention): The causal self-attention layer.
         layer_norm_2 (RMSNorm): Layer normalization applied before the MLP.
-        mlpf (nn.Sequential): A feedforward pass through the MLP with a Linear (output=4*n_embd), GELU non-linearity(use the BERTGELU), Linear (output=n_embd), and residual Dropout.
+        mlpf (nn.Sequential): A feedforward pass through the MLP with a 
+                                Linear (output=4*n_embd), 
+                                GELU non-linearity(use the BERTGELU), 
+                                Linear (output=n_embd), 
+                                and residual Dropout.
 
     Parameters:
         config (object): Configuration object with attributes n_embd and resid_pdrop. n_embd is the 
@@ -217,10 +223,19 @@ class TransformerDecoderBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
         # Initialize the layers
-        raise NotImplementedError
+        self.layer_norm1 = RMSNorm(dim = config.n_embd)
+        self.self_attention = CausalSelfAttention(config=config)
+        self.layer_norm2 = RMSNorm(dim = config.n_embd)
+        self.mlpf = nn.Sequential(nn.Linear(in_features=config.n_embd, out_features=4*config.n_embd),
+                                   BERTGELU(),
+                                   nn.Linear(in_features=4*config.n_embd, out_features=config.n_embd),
+                                   nn.Dropout(p = config.resid_pdrop))
     def forward(self, x):
         # Forward pass through the Decoder Layer
-        out = ...
+        # MHA + residual connection from input
+        mha = self.self_attention(self.layer_norm1(x)) + x
+        # MLP + residual connection from (MHA+input)
+        out = self.mlpf(self.layer_norm2(mha)) + mha
         return out
 
 
@@ -424,8 +439,8 @@ class GPT(nn.Module):
 
         # Forward token and position embedders
         # token embeddings of shape (b, t, n_embd)
-        # apply dropout to the tokens
-        tok_emb = ...
+        # apply dropout to the tokens (after positional embedding)
+        tok_emb = self.transformer.w_token_emb(idx)
 
         if self.config.abs_emb:
             pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
@@ -433,10 +448,16 @@ class GPT(nn.Module):
             x = tok_emb + pos_emb
         else:
             x = tok_emb
+        
+        # Apply input embedding dropout (to not overly rely on specific embedding dims)
+        x = self.transformer.drop(x)
 
         # Iterate through the transformer blocks
+        for tblock in self.transformer.h:
+            x = tblock(x)
         # Apply final layer normalization and linear layer to produce logits
-        logits = ...
+        x = self.transformer.ln_f(x)
+        logits = self.lm_head(x)
 
         return logits
 
@@ -480,23 +501,46 @@ class GPT(nn.Module):
 
             # forward the model to get the logits for the index in the sequence
             # pluck the logits at the final step and scale by desired temperature
+            logits = self.forward(idx)
+            logits_final_step = logits[:, -1, :] 
+            logits_final_step /= temperature # scale by temperature before softmax to control distribution
 
             if not do_sample:
                 # take the most likely token
-                idx_next = ...
+                idx_next = torch.argmax(logits_final_step, dim=-1, keepdim=True)
             
             else:
                 # apply softmax to convert logits to (normalized) probabilities
+                probs = torch.softmax(logits_final_step, dim = -1)
 
                 # optionally only consider top-k logits for sampling. 
                 if top_k is not None:
-                    pass
+                    topk_probs, topk_indices = torch.topk(probs, top_k, dim=-1) # (B, top_k)
+                    topk_probs /= topk_probs.sum(dim=-1, keepdim=True) # re-normalize
+                    # sample with re-normalized prob
+                    sample = torch.multinomial(topk_probs, num_samples=1)
+                    idx_next = topk_indices.gather(-1, sample) # (B, 1)
 
+                
                 # optionally apply top-p sampling
-                if top_p is not None:
-                    pass
+                elif top_p is not None:
+                    sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)  # (B, V)
+                    cumsum_probs = torch.cumsum(sorted_probs, dim=-1) # get cumulative probs
+                    drop = cumsum_probs > top_p # not in top-p subset
+                    # shift the mask so we always keep at least the first token
+                    drop[..., 1:] = drop[..., :-1].clone()
+                    drop[..., 0] = False
+                    sorted_probs = sorted_probs.masked_fill(drop, 0.0)
+                    sorted_probs /= sorted_probs.sum(dim=-1, keepdim=True) # re-normalize
+                    # sample with re-normalized prob
+                    sample = torch.multinomial(sorted_probs, num_samples=1)
+                    idx_next = sorted_indices.gather(-1, sample) # (B, 1)
+                
+                # apply sampling to all tokens
+                else:
+                    idx_next = torch.multinomial(probs, num_samples=1, replacement=False)
             
             # append sampled index to the running sequence and continue
-            idx = ...
+            idx = torch.cat([idx, idx_next], dim = -1)
 
         return idx

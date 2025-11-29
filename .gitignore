@@ -8,7 +8,7 @@ __pycache__/
 
 # Folders
 data/
-
+.DS_Store
 # Distribution / packaging
 .Python
 build/
@@ -182,3 +182,4 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+

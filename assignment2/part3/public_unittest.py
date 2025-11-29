@@ -14,7 +14,7 @@ class TestConvolutionLayers(unittest.TestCase):
         cls.in_features = 3
         cls.out_features = 5
         cls.num_nodes = 4
-        cls.edge_index = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])
+        cls.edge_index = torch.tensor([[0, 1, 2, 3, 2, 1, 0], [1, 2, 3, 0, 0, 0, 2]])
 
     def setUp(self):
         self.input_data = torch.randn(self.num_nodes, self.in_features, requires_grad=True)

@@ -1,4 +1,4 @@
-name: dl2025
+name: dl2024
 channels:
   - pytorch
   - nvidia

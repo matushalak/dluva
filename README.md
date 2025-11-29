@@ -1,4 +1,4 @@
-# UvA Deep Learning 1 Assignments, 2024 edition
+# UvA Deep Learning 1 Assignments, 2025 edition
 
 ## Assignment 1
 
