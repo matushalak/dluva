@@ -54,7 +54,7 @@ def load_cifar10(batch_size=4, valid_ratio=0.75, test_bs_1 = True, augmentations
 
 
 def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STANDARD, defense_args = {}):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'mps' if torch.backends.mps.is_available() else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     since = time.time()
     #define criterion
     criterion = nn.CrossEntropyLoss()
