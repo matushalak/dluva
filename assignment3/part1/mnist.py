@@ -24,6 +24,16 @@ import numpy as np
 def discretize(x, num_values):
     return (x * num_values).long().clamp_(max=num_values-1)
 
+class DiscretizeTransform:
+    '''
+    Lambda was leading to picking issues on macOS
+    '''
+    def __init__(self, num_values: int):
+        self.num_values = num_values
+
+    def __call__(self, x):
+        return discretize(x, self.num_values)
+
 def mnist(root='../data/', batch_size=128, num_workers=4, download=True):
     """
     Returns data loaders for 4-bit MNIST dataset, i.e. values between 0 and 15.
@@ -38,7 +48,9 @@ def mnist(root='../data/', batch_size=128, num_workers=4, download=True):
                    root directory.
     """
     data_transforms = transforms.Compose([transforms.ToTensor(),
-                                          transforms.Lambda(lambda x: discretize(x, num_values=16))
+                                          DiscretizeTransform(num_values=16)
+                                          # Lambda was leading to picking issues on macOS
+                                          # transforms.Lambda(lambda x: discretize(x, num_values=16))
                                         ])
 
     dataset = torchvision.datasets.MNIST(
@@ -55,12 +67,12 @@ def mnist(root='../data/', batch_size=128, num_workers=4, download=True):
     # when writing the train code.
     train_loader = data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-        pin_memory=True)
+        pin_memory=True, persistent_workers=True)
     val_loader = data.DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=0,
         drop_last=False)
     test_loader = data.DataLoader(
-        test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+        test_set, batch_size=batch_size, shuffle=False, num_workers=0,
         drop_last=False)
 
     return train_loader, val_loader, test_loader

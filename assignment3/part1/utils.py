@@ -32,14 +32,8 @@ def sample_reparameterize(mean, std):
     """
     assert not (std < 0).any().item(), "The reparameterization trick got a negative std as input. " + \
                                        "Are you sure your input is std and not log_std?"
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    z = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    # reparametrization trick: z = mu + sigma * eps     with eps ~ N(0,I)
+    z = mean + (std * torch.randn(mean.shape, device=mean.device))
     return z
 
 
@@ -54,16 +48,10 @@ def KLD(mean, log_std):
         KLD - Tensor with one less dimension than mean and log_std (summed over last dimension).
               The values represent the Kullback-Leibler divergence to unit Gaussians.
     """
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    KLD = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-    return KLD
+    # KLD of 2 multivar gaussians expressed as sum of univar gaussians
+    # solely with mean and log_std along each dimension
+    KLD:torch.Tensor = 0.5 * (torch.exp(2*log_std) + torch.pow(mean, 2) - 1 - (2*log_std))
+    return torch.sum(KLD,dim = -1)
 
 
 def elbo_to_bpd(elbo, img_shape):
@@ -75,14 +63,12 @@ def elbo_to_bpd(elbo, img_shape):
     Outputs:
         bpd - The negative log likelihood in bits per dimension for the given image.
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    bpd = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    # change log base from e to 2
+    nll = elbo * torch.log2(torch.tensor(torch.e, device=elbo.device))
+    # exclude first batch dim
+    image_dims = torch.tensor(img_shape[1:], device = elbo.device)
+    # bits per dimension score
+    bpd = nll * (1 / torch.prod(image_dims, dim=0))
     return bpd
 
 

@@ -101,6 +101,7 @@ def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STA
                                                 return_preds = True)
                     # backward + optimize only if in training phase
                     elif defense_strategy == PGD and phase == 'train':
+                        # TODO
                         # Get adverserial examples using PGD attack
                         # Add them to the original batch
                         # Make sure the model has the correct labels
@@ -145,7 +146,7 @@ def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STA
 
 
 def test(model, testloader):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'mps' if torch.backends.mps.is_available() else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     correct = 0
     total = 0

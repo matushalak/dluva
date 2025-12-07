@@ -30,11 +30,13 @@ def fgsm_attack(image, data_grad, epsilon = 0.25):
     # Get the sign of the data gradient (element-wise)
     # Create the perturbed image, scaled by epsilon
     # Make sure values stay within valid range
-    raise NotImplementedError()
+    # epsilon = step size, sign = direction of steepest ascent (UP THE LOSS)
+    perturbed_image = image + epsilon*torch.sign(data_grad)
+    perturbed_image = torch.clip(perturbed_image, image.min().round(), image.max().round())
     return perturbed_image
 
 
-    
+# TODO
 def fgsm_loss(model, criterion, inputs, labels, defense_args, return_preds = True):
     alpha = defense_args[ALPHA]
     epsilon = defense_args[EPSILON]
@@ -53,7 +55,7 @@ def fgsm_loss(model, criterion, inputs, labels, defense_args, return_preds = Tru
     else:
         return loss
 
-
+# TODO
 def pgd_attack(model, data, target, criterion, args):
     alpha = args[ALPHA]
     epsilon = args[EPSILON]
@@ -71,7 +73,7 @@ def pgd_attack(model, data, target, criterion, args):
 
 
 def test_attack(model, test_loader, attack_function, attack_args):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'mps' if torch.backends.mps.is_available() else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     correct = 0
     criterion = nn.CrossEntropyLoss()
     adv_examples = []
@@ -90,14 +92,18 @@ def test_attack(model, test_loader, attack_function, attack_args):
         
         if attack_function == FGSM: 
             # Get the correct gradients wrt the data
+            loss = -loss
+            loss.backward()
             # Perturb the data using the FGSM attack
+            perturbed_data = fgsm_attack(data, data.grad)
             # Re-classify the perturbed image
-            raise NotImplementedError()
+            output = model(perturbed_data)
 
         elif attack_function == PGD:
             # Get the perturbed data using the PGD attack
+            perturbed_data = pgd_attack(model, data, target, criterion, args=attack_args)
             # Re-classify the perturbed image
-            raise NotImplementedError()
+            output = model(perturbed_data)
         else:
             print(f"Unknown attack {attack_function}")
 

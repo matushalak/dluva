@@ -42,7 +42,7 @@ class VAE(pl.LightningModule):
         """
         super().__init__()
         self.save_hyperparameters()
-
+        self.zdim = z_dim
         self.encoder = CNNEncoder(z_dim=z_dim, num_filters=num_filters)
         self.decoder = CNNDecoder(z_dim=z_dim, num_filters=num_filters)
 
@@ -58,25 +58,22 @@ class VAE(pl.LightningModule):
             bpd - The average bits per dimension metric of the batch.
                   This is also the loss we train on. Shape: single scalar
         """
-
-        # Hints:
-        # - Implement the empty functions in utils.py before continuing
-        # - The forward run consists of encoding the images, sampling in
-        #   latent space, and decoding.
-        # - By default, torch.nn.functional.cross_entropy takes the mean accross
-        #   all axes. Do not forget to change the 'reduction' parameter to
-        #   make it consistent with the loss definition of the assignment.
-
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        L_rec = None
-        L_reg = None
-        bpd = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        b, c, h, w = imgs.shape
+        # obtain variational distribution parameters (mu, log(std))
+        mean, logstd = self.encoder(imgs)
+        # sample in latent space using mu, std
+        z = sample_reparameterize(mean, torch.exp(logstd))
+        # obtain logits from decoder
+        logits = self.decoder(z)
+        # reconstruction loss: obtain negative log likelihood by summing over CE over all pixels and possible values
+        # sum over pixels, average over batch
+        L_rec = F.cross_entropy(logits.view(b, -1, h*w), imgs.view(b, h*w), reduction= 'none').sum(axis = -1).mean()
+        # regularization loss term (average over batch dimension)
+        L_reg = KLD(mean, logstd).mean()
+        # -ELBO = Reconstruction loss + Regularization loss
+        negELBO = L_rec + L_reg
+        # convert elbo to bits per dimension loss
+        bpd = elbo_to_bpd(negELBO, img_shape=imgs.shape)
         return L_rec, L_reg, bpd
 
     @torch.no_grad()
@@ -88,14 +85,18 @@ class VAE(pl.LightningModule):
         Outputs:
             x_samples - Sampled, 4-bit images. Shape: [B,C,H,W]
         """
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        x_samples = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        # sample from standard normal
+        z_samples = torch.randn((batch_size, self.zdim), device=self.decoder.device)
+        # pass through decoder to obtain logits
+        logits = self.decoder(z_samples) # (B, C, H, W)
+        b, c, h, w = logits.shape
+        # obtain probabilities by normalizing over possible values (C dimension)
+        probs = torch.softmax(logits, dim = 1) # (B, C, H, W)
+        # sample from categorical distribution according to probabilities
+        probs_flat = probs.permute(0,2,3,1).reshape(-1, c) # (B*H*W, C)
+        # sample one value per pixel
+        x_samples = torch.multinomial(probs_flat, num_samples=1).squeeze() # (B*H*W, 1)
+        x_samples = x_samples.view(b, h, w).unsqueeze(1) # reshape to image grid (B, 1, H, W)
         return x_samples
 
     def configure_optimizers(self):
@@ -243,7 +244,7 @@ if __name__ == '__main__':
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
-    parser.add_argument('--num_workers', default=4, type=int,
+    parser.add_argument('--num_workers', default=10, type=int,
                         help='Number of workers to use in the data loaders. To have a truly deterministic run, this has to be 0. ' + \
                              'For your assignment report, you can use multiple workers (e.g. 4) and do not have to set it to 0.')
     parser.add_argument('--log_dir', default='VAE_logs', type=str,

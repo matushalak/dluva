@@ -20,7 +20,9 @@ import numpy as np
 
 
 class CNNEncoder(nn.Module):
-    def __init__(self, num_input_channels: int = 1, num_filters: int = 32,
+    def __init__(self, 
+                 num_input_channels: int = 1, 
+                 num_filters: int = 32,
                  z_dim: int = 20):
         """Encoder with a CNN network
         Inputs:
@@ -31,17 +33,39 @@ class CNNEncoder(nn.Module):
             z_dim - Dimensionality of latent representation z
         """
         super().__init__()
-
-        # For an intial architecture, you can use the encoder of Tutorial 9.
-        # Feel free to experiment with the architecture yourself, but the one specified here is
-        # sufficient for the assignment.
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        
+        # latent dimension
+        self.z_dim = z_dim
+        # Architecture from Tutorial 9 adapted to 28x28 MNIST
+        # + added LayerNorm before nonlinearities
+        # + added residual connections around Conv blocks that dont change shape
+        self.encoder = nn.Sequential(
+            # downsample res
+            nn.Conv2d(num_input_channels, num_filters, kernel_size=3, padding=1, stride=2), # 28x28 => 14x14
+            nn.LayerNorm((num_filters, 14, 14)),
+            nn.GELU(),
+            # same res conv + residual connection
+            ResidualConv2d(n_channels=num_filters, spatial_dim=(14,14), kernel_size=3), # 14x14 => 14x14
+            nn.LayerNorm((num_filters, 14, 14)),
+            nn.GELU(),
+            # downsample res
+            nn.Conv2d(num_filters, 2*num_filters, kernel_size=3, padding=1, stride=2), # 14x14 => 7x7
+            nn.LayerNorm((2*num_filters, 7, 7)),
+            nn.GELU(),
+            # same res conv + residual connection
+            ResidualConv2d(n_channels=2*num_filters, spatial_dim=(7,7), kernel_size=3), # 7x7 => 7x7
+            nn.LayerNorm((2*num_filters, 7, 7)),
+            nn.GELU(),
+            # downsample res
+            nn.Conv2d(2*num_filters, 2*num_filters, kernel_size=3, padding=1, stride=2), # 7x7 => 4x4
+            nn.LayerNorm((2*num_filters, 4, 4)),
+            nn.GELU(),
+            nn.Flatten(), # Image grid to single feature vector 4x4 => (16,)
+            # want to predict both mean and log(std), learn one linear layer for both
+            # log(std) \in R^D can be obtained with normal linear layer, and converted to
+            # std \in R_+^D using exp(log(std))
+            nn.Linear(16*2*num_filters, z_dim * 2)
+        )
 
     def forward(self, x):
         """
@@ -53,20 +77,38 @@ class CNNEncoder(nn.Module):
                       of the latent distributions.
         """
         x = x.float() / 15 * 2.0 - 1.0  # Move images between -1 and 1
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        mean = None
-        log_std = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        # run batch of images through network
+        latent_params = self.encoder(x) # (B, 2*z_dim)
+        mean = latent_params[..., :self.z_dim] # (B, z_dim)
+        log_std = latent_params[..., self.z_dim:] # (B, z_dim)
         return mean, log_std
 
+class ResidualConv2d(nn.Module):
+    def __init__(self, 
+                 n_channels: int,
+                 spatial_dim: tuple[int, int],
+                 kernel_size: int):
+        '''
+        Convolution block that doesn't change channel/spatial dimensions 
+        with residual connection around it
+        '''
+        super().__init__()
+
+        # Keep same shape just pass through a series of convolutions
+        self.resblock = nn.Sequential(
+            nn.Conv2d(n_channels, n_channels, kernel_size=kernel_size, padding='same', stride = 1),
+            nn.LayerNorm((n_channels, *spatial_dim)),
+            nn.GELU(),
+            nn.Conv2d(n_channels, n_channels, kernel_size=kernel_size, padding='same', stride = 1),
+        )
+    def forward(self, x):
+        # Residual connection
+        return x + self.resblock(x)
 
 class CNNDecoder(nn.Module):
-    def __init__(self, num_input_channels: int = 16, num_filters: int = 32,
+    def __init__(self, 
+                 num_input_channels: int = 16, 
+                 num_filters: int = 32,
                  z_dim: int = 20):
         """Decoder with a CNN network.
         Inputs:
@@ -78,16 +120,32 @@ class CNNDecoder(nn.Module):
         """
         super().__init__()
 
-        # For an intial architecture, you can use the decoder of Tutorial 9.
-        # Feel free to experiment with the architecture yourself, but the one specified here is
-        # sufficient for the assignment.
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        self.expand = nn.Linear(z_dim, 16*2*num_filters) # (20,) => (16*2*32,) => (2*32, 4, 4)
+        # Architecture from Tutorial 9 adapted to 28x28 MNIST
+        # + added LayerNorm before nonlinearities
+        # + added residual connections around Conv blocks that dont change shape
+        self.decoder = nn.Sequential(
+            nn.LayerNorm((2*num_filters, 4, 4)),
+            nn.GELU(),
+            # upsample with transposed conv
+            nn.ConvTranspose2d(2*num_filters, 2*num_filters, kernel_size=3, output_padding=0, padding=1, stride=2), # 4x4 => 7x7
+            nn.LayerNorm((2*num_filters, 7, 7)),
+            nn.GELU(),
+            # dont change shape - normal conv with residual connection
+            ResidualConv2d(n_channels=2*num_filters, spatial_dim=(7,7), kernel_size=3), # 7x7 => 7x7
+            nn.LayerNorm((2*num_filters, 7, 7)),
+            nn.GELU(),
+            # upsample with transposed conv
+            nn.ConvTranspose2d(2*num_filters, num_filters, kernel_size=3, output_padding=1, padding=1, stride=2), # 7x7 => 14x14
+            nn.LayerNorm((num_filters, 14, 14)),
+            nn.GELU(),
+            # dont change shape - normal conv with residual connection
+            ResidualConv2d(n_channels=num_filters, spatial_dim=(14,14), kernel_size=3), # 14x14 => 14x14
+            nn.LayerNorm((num_filters, 14, 14)),
+            nn.GELU(),
+            # upsample with transposed conv
+            nn.ConvTranspose2d(num_filters, num_input_channels, kernel_size=3, output_padding=1, padding=1, stride=2), # 14x14 => 28x28
+        )
 
     def forward(self, z):
         """
@@ -98,15 +156,11 @@ class CNNDecoder(nn.Module):
                 This should be a logit output *without* a softmax applied on it.
                 Shape: [B,num_input_channels,28,28]
         """
-
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        x = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        x = self.expand(z) # (B, 20) => (B, 16*2*32)
+        x = x.reshape(x.shape[0], -1, 4, 4) # (B, 16*2*32) => (B, 2*32, 4, 4)
+        # get logits for all possible 4-bit values for each pixel in x
+        # by passing (reshaped) latents (z) through decoder
+        x = self.decoder(x) # (B, 2*32, 4, 4) => (B, 16, 28, 28)
         return x
 
     @property
