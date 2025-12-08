@@ -189,6 +189,11 @@ class TestCNNEncoderDecoder(unittest.TestCase):
             z_dim = 20
             decoder  = CNNDecoder(z_dim=20)
             z = torch.randn(64, z_dim)
+            
+            # from utils import visualize_manifold
+            # decoder = CNNDecoder(z_dim=2)
+            # visualize_manifold(decoder)
+            
             imgs = decoder(z)
             self.assertTrue(len(imgs.shape) == 4 and all([imgs.shape[i] == o for i,o in enumerate([64,16,28,28])]),
                              msg="Output of the decoder should be an image with shape [B,C,H,W], but got: %s." % str(imgs.shape))

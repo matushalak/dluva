@@ -85,22 +85,23 @@ def visualize_manifold(decoder, grid_size=20):
     Outputs:
         img_grid - Grid of images representing the manifold.
     """
-
-    ## Hints:
-    # - You can use the icdf method of the torch normal distribution  to obtain z values at percentiles.
-    # - Use the range [0.5/grid_size, 1.5/grid_size, ..., (grid_size-0.5)/grid_size] for the percentiles.
-    # - torch.meshgrid might be helpful for creating the grid of values
-    # - You can use torchvision's function "make_grid" to combine the grid_size**2 images into a grid
-    # - Remember to apply a softmax after the decoder
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    img_grid = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    # percentile range with significant density
+    percentiles = torch.linspace(0.5/grid_size, (grid_size-0.5)/grid_size, grid_size)
+    standard_normal = torch.distributions.Normal(loc=0, scale=1)
+    zvals = standard_normal.icdf(percentiles)
+    z1grid, z2grid = torch.meshgrid(zvals, zvals, indexing='ij')
+    # reformat to collapse grid to one batch and match latent dimensionality
+    zgrid = torch.stack([z1grid.flatten(), z2grid.flatten()], dim=1) # (grid**2, 2)
+    # can pass to decoder (B=grid**2, zdim = 2)
+    logits = decoder(zgrid) # (grid**2, 2) => (grid**2, 16, 28, 28)
+    probs = torch.softmax(logits, dim = 1)
+    # compute output means
+    values = torch.arange(16)
+    output_means = probs * values[None, :, None, None]
+    output_means = output_means.sum(dim = 1).float().unsqueeze(1)
+    output_means /= 15
+    # make grid with torchvision make_grid
+    img_grid = make_grid(output_means, nrow=grid_size, padding=0, normalize=True, value_range=(0,1))
 
     return img_grid
 
