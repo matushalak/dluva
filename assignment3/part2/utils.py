@@ -39,9 +39,12 @@ def load_cifar10(batch_size=4, valid_ratio=0.75, test_bs_1 = True, augmentations
 
     validset, testset = torch.utils.data.random_split(validtestset, [valid_len, len(validtestset) - valid_len])
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-    validloader = torch.utils.data.DataLoader(validset, batch_size=batch_size, shuffle=False, num_workers=2)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=1 if test_bs_1 else batch_size, shuffle=False, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2,
+                                              pin_memory=True, persistent_workers=True)
+    validloader = torch.utils.data.DataLoader(validset, batch_size=batch_size, shuffle=False, num_workers=2,
+                                              pin_memory=True, persistent_workers=True)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=1 if test_bs_1 else batch_size, shuffle=False, num_workers=2,
+                                             pin_memory=True, persistent_workers=True)
 
     classes = trainset.classes
     N_tr = len(trainset)
@@ -52,7 +55,7 @@ def load_cifar10(batch_size=4, valid_ratio=0.75, test_bs_1 = True, augmentations
 
     return trainloader, validloader, testloader, attributes
 
-
+from tqdm import tqdm
 def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STANDARD, defense_args = {}):
     device = 'mps' if torch.backends.mps.is_available() else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     since = time.time()
@@ -85,7 +88,7 @@ def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STA
             running_loss = 0.0
             running_corrects = 0
             # Iterate over data.
-            for inputs, labels in dataloader:
+            for inputs, labels in tqdm(dataloader):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 # forward
@@ -101,11 +104,13 @@ def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STA
                                                 return_preds = True)
                     # backward + optimize only if in training phase
                     elif defense_strategy == PGD and phase == 'train':
-                        # TODO
                         # Get adverserial examples using PGD attack
+                        adv_egs = pgd_attack(model, inputs, labels, criterion, defense_args)
                         # Add them to the original batch
+                        inputs = torch.cat((adv_egs, inputs), dim = 0)
                         # Make sure the model has the correct labels
-                        raise NotImplementedError()
+                        labels = torch.cat((labels, labels), dim = 0)
+                        
                         optimizer.zero_grad()
                         outputs = model(inputs)
                         loss = criterion(outputs, labels)
@@ -125,7 +130,7 @@ def train(model, trainloader, validloader, num_epochs=25, defense_strategy = STA
             if defense_strategy == PGD and phase == 'train':
                 N*=2 #account for adverserial examples
             epoch_loss = running_loss / N
-            epoch_acc = running_corrects.double() / N
+            epoch_acc = running_corrects.float() / N
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -151,7 +156,7 @@ def test(model, testloader):
     correct = 0
     total = 0
     with torch.no_grad():
-        for data in testloader:
+        for data in tqdm(testloader):
             images, labels = data
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)

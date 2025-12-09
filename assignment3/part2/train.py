@@ -15,8 +15,8 @@ def main(args):
     device = 'mps' if torch.backends.mps.is_available() else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
     strategy_args = {STANDARD: None, 
-                 FGSM: {ALPHA: args.alpha_fgsm, EPSILON: args.epsilon_fgsm}, 
-                 PGD: {ALPHA: args.alpha_pgd, EPSILON: args.epsilon_pgd, NUM_ITER: args.num_iter_pgd}}
+                     FGSM: {ALPHA: args.alpha_fgsm, EPSILON: args.epsilon_fgsm}, 
+                     PGD: {ALPHA: args.alpha_pgd, EPSILON: args.epsilon_pgd, NUM_ITER: args.num_iter_pgd}}
     for training_strategy in args.train_strats:
         print(f"training_strategy: {training_strategy}")
         print("Loading model")
@@ -65,7 +65,7 @@ def visualise(args, adv_examples, training_strategy, attack, save_dir = ''):
             ax1.imshow(im1)
             ax1.axis('off')
             label_2 = CIFAR10_LABELS[adv_ex[1]]
-            ax2.set_title(f"Adversasrial Image\n Predicted label: {label_2}")
+            ax2.set_title(f"Adversarial Image\n Predicted label: {label_2}")
             im2 = adv_ex[3][0].numpy().transpose(1, 2, 0)
             ax2.imshow(im2)
             ax2.axis('off')
@@ -83,8 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--visualise', action='store_true', help='Visualise adversarial examples')
     parser.add_argument('--epsilon_fgsm', type=float, default=0.1, help='Epsilon for FGSM attack')
     parser.add_argument('--alpha_fgsm', type=float, default=0.5, help='Alpha for FGSM attack')
-    parser.add_argument('--epsilon_pgd', type=float, default=0.01, help='Epsilon for PGD attack')
-    parser.add_argument('--alpha_pgd', type=float, default=2, help='Alpha for PGD attack')
+    parser.add_argument('--epsilon_pgd', type=float, default=0.1, help='Epsilon for PGD attack')
+    parser.add_argument('--alpha_pgd', type=float, default=0.01, help='Alpha for PGD attack')
     parser.add_argument('--num_iter_pgd', type=int, default=10, help='Number of iterations for PGD attack')
     parser.add_argument('--save_dir', type=str, default='', help='Directory to save'	)
     parser.add_argument('--test_crossover_defense', action='store_true', help='Test crossover defense')
