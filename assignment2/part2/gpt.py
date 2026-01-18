@@ -149,8 +149,9 @@ class CausalSelfAttention(nn.Module):
         
         # add head dimension -> (B, nh, T, 3*d_k)
         d_k = C // self.n_head
-        allheads = allheads.view(B, T, 3*d_k, self.n_head) 
-        allheads = torch.permute(allheads, (0, 3, 1, 2))
+        # XXX 3*d_k is fastest changing dimension (preserves contiguous head-chunks)
+        allheads = allheads.view(B, T, self.n_head, 3*d_k) 
+        allheads = torch.permute(allheads, (0, 2, 1, 3))
         
         # Split into Q, K, V each with shape (B, nh, T, d_k)
         q, k ,v  = torch.tensor_split(allheads, 3, dim = -1)
@@ -165,8 +166,9 @@ class CausalSelfAttention(nn.Module):
         if self.use_flash_attn:
             # Flash attention - exact attention optimized in a fused kernel
             y = F.scaled_dot_product_attention(q, k, v, 
-                                               self.mask[..., :T, :T], 
-                                               self.config.attn_pdrop)
+                                               attn_mask=None, 
+                                               is_causal=True,
+                                               dropout_p=self.config.attn_pdrop)
         else:
             # Compute attention scores
             # (similarity) Scaled Dot Product = (Q@K.T)/sqrt(d_k)
@@ -501,7 +503,8 @@ class GPT(nn.Module):
 
             # forward the model to get the logits for the index in the sequence
             # pluck the logits at the final step and scale by desired temperature
-            logits = self.forward(idx)
+            # XXX need to crop growing sequence to context length
+            logits = self.forward(idx_cond)
             logits_final_step = logits[:, -1, :] 
             logits_final_step /= temperature # scale by temperature before softmax to control distribution
 
